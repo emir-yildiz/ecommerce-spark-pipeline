@@ -14,7 +14,3 @@ Sistem tamamen **Dockerized** bir yapıya sahiptir ve aşağıdaki bileşenleri 
 
 ### 1. Hazırlık
 Projenin çalışması için kök dizinde bir `.env` dosyası oluşturun ve veritabanı kimlik bilgilerini tanımlayın:
-
-```env
-DB_USER=admin
-DB_PASS=securepassword123
