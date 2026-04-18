@@ -1,0 +1,5 @@
+aiohttp==3.9.3        # async HTTP istekleri (requests'in async versiyonu)
+asyncpg==0.29.0       # async PostgreSQL sürücüsü
+pyspark==3.5.1        # Python Spark API'si
+psycopg2-binary==2.9.9 # Spark'ın JDBC alternatifi için
+python-dotenv==1.0.1  # .env dosyasını okur

@@ -1,0 +1,85 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────
+#  E-Ticaret Veri Pipeline
+#  Servisler: postgres | spark-master | spark-worker | app
+# ─────────────────────────────────────────────
+
+services:
+
+  # ── 1. VERİTABANI ──────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: pipeline_postgres
+    environment:
+      POSTGRES_DB: ecommerce        # uygulama veritabanı
+      POSTGRES_USER: ${DB_USER}     # .env'den okunur
+      POSTGRES_PASSWORD: ${DB_PASS} # şifre asla hardcode edilmez
+    ports:
+      - "5432:5432"
+    volumes:
+      # named volume: container silinse bile veri kalır
+      - pgdata:/var/lib/postgresql/data
+      # ilk açılışta tabloları otomatik oluşturur
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ecommerce"]
+      interval: 5s
+      retries: 10
+
+  # ── 2. SPARK MASTER ────────────────────────
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: spark_master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+    ports:
+      - "8080:8080"   # Spark Web UI
+      - "7077:7077"   # Worker'ların bağlandığı port
+    volumes:
+      # işlenen veri/checkpoint dosyaları için ortak alan
+      - spark_data:/opt/spark/work
+
+  # ── 3. SPARK WORKER ────────────────────────
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: spark_worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G   # worker'a ayrılan RAM
+      - SPARK_WORKER_CORES=2     # worker'a ayrılan CPU çekirdeği
+    depends_on:
+      - spark-master
+    volumes:
+      - spark_data:/opt/spark/work
+
+  # ── 4. PYTHON UYGULAMA ─────────────────────
+  app:
+    build: .                        # Dockerfile'ı bu dizinde ara
+    container_name: pipeline_app
+    environment:
+      DB_HOST: postgres             # servis adı = hostname (Docker DNS)
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ecommerce
+      SPARK_MASTER: spark://spark-master:7077
+    depends_on:
+      postgres:
+        condition: service_healthy  # postgres hazır olmadan başlama
+      spark-master:
+        condition: service_started
+    volumes:
+      # kod değişikliklerini container'a anında yansıtır (dev mode)
+      - ./app:/app
+    command: python main.py
+
+# ─────────────────────────────────────────────
+#  VOLUMES — named volume'lar Docker tarafından yönetilir
+#  "docker volume ls" ile görebilirsin
+# ─────────────────────────────────────────────
+volumes:
+  pgdata:       # PostgreSQL kalıcı verisi
+  spark_data:   # Spark geçici/checkpoint dosyaları
